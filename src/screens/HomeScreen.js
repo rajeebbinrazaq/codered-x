@@ -1,43 +1,25 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { colors, spacing } from '../theme/colors';
-import { parseM3U } from '../utils/m3uParser';
-import { MOCK_PLAYLIST } from '../utils/mockData';
+import { getPlaylistData } from '../utils/mockData';
 import { Ionicons } from '@expo/vector-icons';
-import * as DocumentPicker from 'expo-document-picker';
+import { useFocusEffect } from '@react-navigation/native';
 
 const HomeScreen = ({ navigation }) => {
     const [channels, setChannels] = useState([]);
+    const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        // Load mock data initially
-        const parsed = parseM3U(MOCK_PLAYLIST);
-        setChannels(parsed);
-    }, []);
+    useFocusEffect(
+        useCallback(() => {
+            loadChannels();
+        }, [])
+    );
 
-    const pickDocument = async () => {
-        try {
-            const result = await DocumentPicker.getDocumentAsync({
-                type: ['*/*'],
-                copyToCacheDirectory: true,
-            });
-
-            if (result.canceled) return;
-
-            const fileUri = result.assets[0].uri;
-            const response = await fetch(fileUri);
-            const fileContent = await response.text();
-            const parsed = parseM3U(fileContent);
-
-            if (parsed.length > 0) {
-                setChannels(parsed);
-            } else {
-                alert('No channels found in playlist');
-            }
-        } catch (err) {
-            console.error('Error reading file:', err);
-            alert('Failed to read playlist file');
-        }
+    const loadChannels = async () => {
+        setLoading(true);
+        const data = await getPlaylistData();
+        setChannels(data);
+        setLoading(false);
     };
 
     React.useLayoutEffect(() => {
@@ -45,11 +27,8 @@ const HomeScreen = ({ navigation }) => {
             headerShown: true,
             headerRight: () => (
                 <View style={{ flexDirection: 'row' }}>
-                    <TouchableOpacity onPress={pickDocument} style={{ marginRight: spacing.m }}>
-                        <Ionicons name="cloud-upload-outline" size={28} color={colors.primary} />
-                    </TouchableOpacity>
                     <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={{ marginRight: spacing.m }}>
-                        <Ionicons name="person-circle-outline" size={28} color={colors.primary} />
+                        <Ionicons name="settings-outline" size={24} color={colors.primary} />
                     </TouchableOpacity>
                 </View>
             ),
@@ -79,14 +58,29 @@ const HomeScreen = ({ navigation }) => {
 
     return (
         <View style={styles.container}>
-            <View style={styles.listContainer}>
-                <FlatList
-                    data={channels}
-                    keyExtractor={(item, index) => index.toString()}
-                    renderItem={renderChannelItem}
-                    contentContainerStyle={styles.list}
-                />
-            </View>
+            {loading ? (
+                <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                </View>
+            ) : (
+                <View style={styles.listContainer}>
+                    <FlatList
+                        data={channels}
+                        keyExtractor={(item, index) => index.toString()}
+                        renderItem={renderChannelItem}
+                        contentContainerStyle={styles.list}
+                        ListEmptyComponent={
+                            <View style={styles.emptyContainer}>
+                                <Ionicons name="tv-outline" size={64} color={colors.border} />
+                                <Text style={styles.emptyText}>No channels found.</Text>
+                                <TouchableOpacity style={styles.emptyBtn} onPress={() => navigation.navigate('Profile')}>
+                                    <Text style={styles.emptyBtnText}>Manage Playlists</Text>
+                                </TouchableOpacity>
+                            </View>
+                        }
+                    />
+                </View>
+            )}
         </View>
     );
 };
@@ -137,6 +131,30 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
         fontSize: 12,
         marginTop: 4,
+    },
+    emptyContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 100,
+        padding: spacing.xl,
+    },
+    emptyText: {
+        color: colors.textSecondary,
+        fontSize: 16,
+        marginTop: spacing.m,
+        marginBottom: spacing.l,
+        textAlign: 'center',
+    },
+    emptyBtn: {
+        backgroundColor: colors.primary,
+        paddingHorizontal: spacing.l,
+        paddingVertical: spacing.m,
+        borderRadius: 8,
+    },
+    emptyBtnText: {
+        color: 'white',
+        fontWeight: 'bold',
+        fontSize: 16,
     },
 });
 

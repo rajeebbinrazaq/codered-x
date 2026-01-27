@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Dimensions, PanResponder, ActivityIndicator, TouchableWithoutFeedback } from 'react-native';
+import Slider from '@react-native-community/slider';
 import { colors, spacing } from '../theme/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
@@ -19,6 +20,8 @@ const ChannelScreen = ({ route, navigation }) => {
     const [resizeMode, setResizeMode] = useState(ResizeMode.CONTAIN);
     const [gestureStatus, setGestureStatus] = useState({ visible: false, icon: '', text: '' });
     const [controlsVisible, setControlsVisible] = useState(true); // Default visible
+    const [seekValue, setSeekValue] = useState(0);
+    const [isSeeking, setIsSeeking] = useState(false);
 
     const videoRef = useRef(null);
     const controlsTimeoutRef = useRef(null);
@@ -68,7 +71,8 @@ const ChannelScreen = ({ route, navigation }) => {
             await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
             setIsFullscreen(false);
         } else {
-            await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE_LEFT);
+            // By default goes to LANDSCAPE_LEFT, but allows LANDSCAPE_RIGHT if rotated
+            await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
             setIsFullscreen(true);
         }
     };
@@ -98,6 +102,13 @@ const ChannelScreen = ({ route, navigation }) => {
             setActiveChannel(allChannels[prevIdx]);
             setIsLoading(true);
         }
+    };
+    const formatTime = (millis) => {
+        if (!millis) return "00:00";
+        const totalSeconds = Math.floor(millis / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes < 10 ? '0' : ''}${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
     };
 
     // --- Gestures ---
@@ -207,51 +218,84 @@ const ChannelScreen = ({ route, navigation }) => {
         if (!controlsVisible) return null;
 
         const ControlUnit = (
-            <View style={styles.unifiedControlUnit}>
-                {/* Resize Button */}
-                <TouchableOpacity onPress={toggleResizeMode} style={styles.unitBtn}>
-                    <Ionicons name={resizeMode === ResizeMode.CONTAIN ? "resize" : "scan"} size={20} color={colors.playerControl} />
-                </TouchableOpacity>
+            <View style={styles.controlUnitContainer}>
+                <View style={styles.unifiedControlUnit}>
+                    {/* Resize Button */}
+                    <TouchableOpacity onPress={toggleResizeMode} style={styles.unitBtn}>
+                        <Ionicons name={resizeMode === ResizeMode.CONTAIN ? "resize" : "scan"} size={20} color={colors.playerControl} />
+                    </TouchableOpacity>
 
-                {/* Seek Back */}
-                <TouchableOpacity style={styles.unitBtn} onPress={async () => {
-                    if (videoRef.current) {
-                        const status = await videoRef.current.getStatusAsync();
-                        videoRef.current.setPositionAsync(Math.max(0, status.positionMillis - 10000));
-                    }
-                }}>
-                    <Ionicons name="play-back" size={20} color={colors.playerControl} />
-                </TouchableOpacity>
+                    {/* Mute Button */}
+                    <TouchableOpacity onPress={() => videoRef.current?.setIsMutedAsync(!status.isMuted)} style={styles.unitBtn}>
+                        <Ionicons name={status.isMuted ? "volume-mute" : "volume-high"} size={20} color={colors.playerControl} />
+                    </TouchableOpacity>
 
-                {/* Play/Pause */}
-                <TouchableOpacity style={styles.unitPlayBtn} onPress={() => {
-                    resetControlsTimer();
-                    if (status.isPlaying) videoRef.current.pauseAsync();
-                    else videoRef.current.playAsync();
-                }}>
-                    <Ionicons name={status.isPlaying ? "pause" : "play"} size={32} color={colors.playerControl} />
-                </TouchableOpacity>
+                    {/* Seek Back */}
+                    <TouchableOpacity style={styles.unitBtn} onPress={async () => {
+                        if (videoRef.current) {
+                            const status = await videoRef.current.getStatusAsync();
+                            videoRef.current.setPositionAsync(Math.max(0, status.positionMillis - 10000));
+                        }
+                    }}>
+                        <Ionicons name="play-back" size={20} color={colors.playerControl} />
+                    </TouchableOpacity>
 
-                {/* Seek Forward */}
-                <TouchableOpacity style={styles.unitBtn} onPress={async () => {
-                    if (videoRef.current) {
-                        const status = await videoRef.current.getStatusAsync();
-                        videoRef.current.setPositionAsync(status.positionMillis + 10000);
-                    }
-                }}>
-                    <Ionicons name="play-forward" size={20} color={colors.playerControl} />
-                </TouchableOpacity>
+                    {/* Play/Pause */}
+                    <TouchableOpacity style={styles.unitPlayBtn} onPress={() => {
+                        resetControlsTimer();
+                        if (status.isPlaying) videoRef.current.pauseAsync();
+                        else videoRef.current.playAsync();
+                    }}>
+                        <Ionicons name={status.isPlaying ? "pause" : "play"} size={32} color={colors.playerControl} />
+                    </TouchableOpacity>
 
-                {/* Fullscreen Toggle */}
-                <TouchableOpacity onPress={toggleFullscreen} style={styles.unitBtn}>
-                    <Ionicons name={isFullscreen ? "contract" : "expand"} size={20} color={colors.playerControl} />
-                </TouchableOpacity>
+                    {/* Seek Forward */}
+                    <TouchableOpacity style={styles.unitBtn} onPress={async () => {
+                        if (videoRef.current) {
+                            const status = await videoRef.current.getStatusAsync();
+                            videoRef.current.setPositionAsync(status.positionMillis + 10000);
+                        }
+                    }}>
+                        <Ionicons name="play-forward" size={20} color={colors.playerControl} />
+                    </TouchableOpacity>
+
+                    {/* Fullscreen Toggle */}
+                    <TouchableOpacity onPress={toggleFullscreen} style={styles.unitBtn}>
+                        <Ionicons name={isFullscreen ? "contract" : "expand"} size={20} color={colors.playerControl} />
+                    </TouchableOpacity>
+                </View>
+
+                <View style={styles.seekbarContainer}>
+                    <Text style={styles.timeText}>{formatTime(isSeeking ? seekValue : status.positionMillis)}</Text>
+                    <Slider
+                        style={styles.slider}
+                        minimumValue={0}
+                        maximumValue={status.durationMillis || 0}
+                        value={isSeeking ? seekValue : (status.positionMillis || 0)}
+                        onValueChange={(val) => {
+                            setIsSeeking(true);
+                            setSeekValue(val);
+                            resetControlsTimer();
+                        }}
+                        onSlidingComplete={async (val) => {
+                            if (videoRef.current) {
+                                await videoRef.current.setPositionAsync(val);
+                            }
+                            setIsSeeking(false);
+                            resetControlsTimer();
+                        }}
+                        minimumTrackTintColor={colors.primary}
+                        maximumTrackTintColor="rgba(255,255,255,0.3)"
+                        thumbTintColor={colors.primary}
+                    />
+                    <Text style={styles.timeText}>{formatTime(status.durationMillis)}</Text>
+                </View>
             </View>
         );
 
         if (!isFullscreen) {
             return (
-                <View style={[styles.controlsOverlay, { justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 20 }]}>
+                <View style={[styles.controlsOverlay, { justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 5 }]}>
                     {ControlUnit}
                 </View>
             );
@@ -266,8 +310,8 @@ const ChannelScreen = ({ route, navigation }) => {
                         <Text style={styles.headerTitle} numberOfLines={1}>{activeChannel.title}</Text>
                     </View>
 
-                    {/* Bottom - Grouped Controls slightly higher */}
-                    <View style={{ flex: 1, justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 50 }}>
+                    {/* Bottom - Grouped Controls at the bottom */}
+                    <View style={{ flex: 1, justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 15 }}>
                         {ControlUnit}
                     </View>
                 </View>
@@ -375,7 +419,7 @@ const styles = StyleSheet.create({
         flex: 1,
         ...StyleSheet.absoluteFillObject,
         zIndex: 999,
-        backgroundColor: colors.background,
+        backgroundColor: '#000',
     },
     listContainer: {
         flex: 1,
@@ -513,10 +557,38 @@ const styles = StyleSheet.create({
     unifiedControlUnit: {
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 15,
+        paddingTop: 5,
+        paddingBottom: 0,
+        gap: 12,
+    },
+    controlUnitContainer: {
+        width: '95%',
+        maxWidth: 700,
         borderRadius: 20,
-        paddingHorizontal: 20,
-        paddingVertical: 10,
-        gap: 15,
+        padding: 5,
+        alignItems: 'center',
+    },
+    seekbarContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        width: '100%',
+        paddingHorizontal: 15,
+        paddingTop: 0,
+        paddingBottom: 10,
+        marginTop: -5,
+    },
+    timeText: {
+        color: 'white',
+        fontSize: 12,
+        fontWeight: 'bold',
+        minWidth: 45,
+        textAlign: 'center',
+    },
+    slider: {
+        flex: 1,
+        height: 40,
     },
     unitBtn: {
         width: 40,
