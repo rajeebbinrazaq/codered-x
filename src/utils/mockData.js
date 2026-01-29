@@ -85,13 +85,24 @@ export const addPlaylist = async (name, channels) => {
 
 export const deletePlaylist = async (id) => {
     try {
+        console.log(`Attempting to delete playlist with ID: ${id}`);
         const playlists = await getPlaylists();
-        const updatedPlaylists = playlists.filter(p => p.id !== id);
+        console.log('Current stored IDs:', playlists.map(p => ({ id: p.id, type: typeof p.id })));
+        const initialLength = playlists.length;
+
+        const updatedPlaylists = playlists.filter(p => String(p.id) !== String(id));
+
+        if (updatedPlaylists.length === initialLength) {
+            console.warn(`Playlist with ID ${id} not found.`);
+            return false;
+        }
+
         await AsyncStorage.setItem(PLAYLISTS_KEY, JSON.stringify(updatedPlaylists));
+        console.log(`Playlist deleted. New count: ${updatedPlaylists.length}`);
 
         // If the deleted playlist was active, clear the selection
         const activeId = await getActivePlaylistId();
-        if (activeId === id) {
+        if (String(activeId) === String(id)) {
             await AsyncStorage.removeItem(ACTIVE_KEY);
         }
 

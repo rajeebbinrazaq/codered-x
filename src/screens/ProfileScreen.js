@@ -72,22 +72,15 @@ const ProfileScreen = () => {
         if (success) setActiveId(id);
     };
 
-    const handleDelete = (id, name) => {
-        Alert.alert(
-            'Delete Playlist',
-            `Are you sure you want to delete "${name}"?`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: async () => {
-                        await deletePlaylist(id);
-                        loadData();
-                    }
-                }
-            ]
-        );
+    const handleDelete = async (id, name) => {
+        console.log(`[ProfileScreen] Direct Delete Request for ID: ${id}`);
+        // Temporarily bypassing Alert to debug
+        const success = await deletePlaylist(id);
+        if (success) {
+            loadData();
+        } else {
+            Alert.alert('Error', 'Failed to delete playlist.');
+        }
     };
 
     const openRename = (id, currentName) => {
@@ -141,8 +134,8 @@ const ProfileScreen = () => {
                 </View>
                 <View style={styles.headerInfo}>
                     <Text style={styles.name}>codeRed X Developer</Text>
-                    <Text style={styles.role}>Rajeeb Bin Razaq (RBR)</Text>
-                    <Text style={styles.roleSub}>Lead Mobile & Software Engineer</Text>
+                    <Text style={styles.role}>rajeeb binrazaq</Text>
+                    <Text style={styles.roleSub}>Lead Software Engineer</Text>
                 </View>
             </View>
 
@@ -174,8 +167,7 @@ const ProfileScreen = () => {
                 <Text style={styles.sectionTitle}>About Developer</Text>
                 <View style={styles.bioCard}>
                     <Text style={styles.bioText}>
-                        I am RBR, a passionate software developer specializing in high-performance cross-platform
-                        mobile applications. codeRed X is built with a focus on delivering a premium,
+                        Myself rajeeb binrazaq, passionate software developer specializing in web and mobile applications. <Text style={styles.boldText}>codeRed X</Text> is built with a focus on delivering a premium,
                         minimalist IPTV experience.
                     </Text>
                 </View>
@@ -193,9 +185,9 @@ const ProfileScreen = () => {
                         <Ionicons name="logo-linkedin" size={20} color={colors.text} />
                         <Text style={styles.linkItemText}>LinkedIn</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.linkItem} onPress={() => openLink('mailto:razeebraz@gmail.com')}>
+                    <TouchableOpacity style={styles.linkItem} onPress={() => openLink('mailto:rajeebrasak@gmail.com')}>
                         <Ionicons name="mail-outline" size={20} color={colors.text} />
-                        <Text style={styles.linkItemText}>Email</Text>
+                        <Text style={styles.linkItemText}>Contact</Text>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -390,6 +382,10 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
         fontSize: 14,
         lineHeight: 22,
+    },
+    boldText: {
+        fontWeight: 'bold',
+        color: colors.text,
     },
     linksContainer: {
         flexDirection: 'row',

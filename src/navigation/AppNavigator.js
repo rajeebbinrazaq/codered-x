@@ -1,6 +1,7 @@
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { NavigationContainer } from '@react-navigation/native';
+import { Image, View, Text } from 'react-native';
 import HomeScreen from '../screens/HomeScreen';
 import ChannelScreen from '../screens/ChannelScreen';
 import ProfileScreen from '../screens/ProfileScreen';
@@ -32,7 +33,18 @@ const AppNavigator = () => {
                 <Stack.Screen
                     name="Home"
                     component={HomeScreen}
-                    options={{ title: 'codeRed X' }}
+                    options={{
+                        headerTitle: () => (
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <Image
+                                    source={require('../../assets/icon.png')}
+                                    style={{ width: 30, height: 30, marginRight: 10, borderRadius: 5 }}
+                                />
+                                <Text style={{ color: colors.text, fontWeight: 'bold', fontSize: 18 }}>codeRed X</Text>
+                            </View>
+                        ),
+                        title: 'codeRed X' // Fallback
+                    }}
                 />
                 <Stack.Screen
                     name="Channel"
@@ -47,7 +59,7 @@ const AppNavigator = () => {
                 <Stack.Screen
                     name="Profile"
                     component={ProfileScreen}
-                    options={{ title: 'Developer' }}
+                    options={{ title: 'Configuration' }}
                 />
             </Stack.Navigator>
         </NavigationContainer>
