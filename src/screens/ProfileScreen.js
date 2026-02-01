@@ -4,12 +4,35 @@ import { colors, spacing } from '../theme/colors';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { parseM3U } from '../utils/m3uParser';
-import { getPlaylists, addPlaylist, deletePlaylist, renamePlaylist, selectPlaylist, getActivePlaylistId } from '../utils/mockData';
+import { getPlaylists, addPlaylist, deletePlaylist, renamePlaylist, selectPlaylist, getActivePlaylistId, fetchAndSyncCloudPlaylists } from '../utils/mockData';
 
 const ProfileScreen = () => {
     const [playlists, setPlaylists] = useState([]);
     const [activeId, setActiveId] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [syncing, setSyncing] = useState(false);
+
+    // ... (rest of states)
+
+    // ... (rest of functions)
+
+    const handleCloudSync = async () => {
+        setSyncing(true);
+        const result = await fetchAndSyncCloudPlaylists();
+        setSyncing(false);
+
+        if (result.success) {
+            if (result.count > 0) {
+                Alert.alert('Success', `Successfully synced ${result.count} cloud playlist(s).`);
+                loadData();
+            } else {
+                Alert.alert('Info', 'No valid playlists found or all failed to download.');
+            }
+        } else {
+            Alert.alert('Error', 'Failed to fetch cloud playlists.');
+        }
+    };
+
 
     // Naming Modal State
     const [modalVisible, setModalVisible] = useState(false);
@@ -143,10 +166,16 @@ const ProfileScreen = () => {
             <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>My Playlists</Text>
-                    <TouchableOpacity style={styles.uploadBtn} onPress={handleUpload}>
-                        <Ionicons name="cloud-upload-outline" size={20} color={colors.primary} />
-                        <Text style={styles.uploadBtnText}>Upload M3U</Text>
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                        <TouchableOpacity style={styles.uploadBtn} onPress={handleCloudSync} disabled={syncing}>
+                            {syncing ? <ActivityIndicator size="small" color={colors.primary} /> : <Ionicons name="cloud-download-outline" size={20} color={colors.primary} />}
+                            <Text style={styles.uploadBtnText}>{syncing ? 'Fetching...' : 'Fetch Cloud'}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.uploadBtn} onPress={handleUpload}>
+                            <Ionicons name="cloud-upload-outline" size={20} color={colors.primary} />
+                            <Text style={styles.uploadBtnText}>Upload M3U</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
                 {loading ? (

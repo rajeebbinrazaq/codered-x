@@ -1,5 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system/legacy';
 import { parseM3U } from './m3uParser';
+
+// ... (existing constants)
+
+// ... (existing functions)
+
 
 const PLAYLISTS_KEY = 'user_playlists_v2';
 const ACTIVE_KEY = 'active_playlist_id_v2';
@@ -127,5 +133,81 @@ export const renamePlaylist = async (id, newName) => {
     } catch (e) {
         console.error("Failed to rename playlist", e);
         return false;
+    }
+};
+
+const convertDriveLink = (url) => {
+    try {
+        const fileIdMatch = url.match(/\/d\/(.*?)\/view/);
+        if (fileIdMatch && fileIdMatch[1]) {
+            return `https://drive.google.com/uc?export=download&id=${fileIdMatch[1]}`;
+        }
+        return url;
+    } catch (e) {
+        return url;
+    }
+};
+
+export const fetchAndSyncCloudPlaylists = async () => {
+    const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1Mir41J7eLpNGFoI2R30MARUDVwLrp-cgySsV7kTIR48/export?format=csv';
+
+    try {
+        console.log('Fetching cloud playlists list...');
+        const response = await fetch(SHEET_CSV_URL);
+        const text = await response.text();
+
+        // Simple CSV parsing (assuming specific format: Name,URL)
+        const rows = text.split('\n').slice(1); // Skip header
+        let addedCount = 0;
+
+        for (const row of rows) {
+            const columns = row.split(',');
+            if (columns.length < 2) continue;
+
+            // Handle potential commas in name by re-joining if needed, or just assume last col is URL
+            // Safe assumption for this specific simple sheet: Last column is URL, rest is name
+            const url = columns.pop().trim();
+            const name = columns.join(',').trim();
+
+            if (!url || !name) continue;
+
+            const downloadUrl = convertDriveLink(url);
+            console.log(`Fetching playlist: ${name} from ${downloadUrl}`);
+
+            try {
+                // Use FileSystem to better handle binary/redirects and CORS on native
+                const tempUri = FileSystem.cacheDirectory + `temp_${Date.now()}.m3u`;
+                const { uri } = await FileSystem.downloadAsync(downloadUrl, tempUri);
+                const m3uContent = await FileSystem.readAsStringAsync(uri);
+
+                // Cleanup temp file
+                await FileSystem.deleteAsync(uri, { idempotent: true });
+
+                const channels = parseM3U(m3uContent);
+
+                if (channels.length > 0) {
+                    const playlists = await getPlaylists();
+                    const existingIndex = playlists.findIndex(p => p.name === name);
+
+                    if (existingIndex !== -1) {
+                        console.log(`Updating existing playlist: ${name}`);
+                        playlists[existingIndex].channels = channels;
+                        await AsyncStorage.setItem(PLAYLISTS_KEY, JSON.stringify(playlists));
+                        addedCount++;
+                    } else {
+                        console.log(`Adding new playlist: ${name}`);
+                        await addPlaylist(name, channels);
+                        addedCount++;
+                    }
+                }
+            } catch (err) {
+                console.error(`Failed to fetch/parse playlist ${name}`, err);
+            }
+        }
+
+        return { success: true, count: addedCount };
+    } catch (e) {
+        console.error("Failed to sync cloud playlists", e);
+        return { success: false, error: e.message };
     }
 };
